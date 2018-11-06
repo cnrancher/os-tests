@@ -1,0 +1,23 @@
+language: python
+python: "3.5"
+
+notifications:
+  email: false
+
+sudo: false
+
+before_install:
+- pip install coverage==4.5.1
+- pip install tox==3.5.2
+- pip install flake8==3.5.0
+- pip install codecov
+- pip install pytest-cov==2.6.0
+
+install: true
+
+script:
+- tox -epep8
+#- tox -ecover
+
+after_success:
+- bash <(curl -s https://codecov.io/bash)
