@@ -5,12 +5,11 @@ Various test cases for RancherOS
 
 ## Building
 
-
 ### Requirement
 
-> It's necessary that your operation system have been installed python succeed.
+> It's necessary that your operating system has been installed python succeed.
 
- Tox was used `virtualenv` to create environment, so, there was must be installed `virtualenv` for your base python environment.
+ Tox was used `virtualenv` to create the environment, so, there was must be installed `virtualenv` for your base python environment.
  
  ```angular2html
 
@@ -18,10 +17,10 @@ pip3 install virtualenv
 
 ```
 
-* Second step, let's create virtualenv with `virtualenv`
+* Second step, create the virtual environment with `virtualenv`
 
 ```angular2html
-virtualenv --python='python version had been install your operations system'  your_env_name
+virtualenv --python='python version had been installed your operations system'  your_env_name
 
 # exec in your env
 source /your_env_name/bin/activate
@@ -37,7 +36,7 @@ source /your_env_name/bin/activate
 
 ## Running
 
-* Run your test case with command `pytest -s engine/ --cloud-config-url={cloud config path}`
+* Run your test cases with command `pytest -s engine/ --cloud-config-url={cloud config path}`
 
 
 ## License
