@@ -29,4 +29,5 @@ def test_write_files(ros_kvm_with_paramiko, cloud_config_url):
     feed_back_d = 'syslog content'
     stdin, stdout, stderr = client.exec_command(command_d, timeout=10)
     output_d = stdout.read().decode('utf-8')
+    client.close()
     assert (feed_back_d in output_d)
