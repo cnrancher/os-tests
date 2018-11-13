@@ -1,0 +1,32 @@
+#cloud-config
+write_files:
+- path: /usr/bin/test
+  permissions: "0755"
+  owner: root
+  content: |
+    #!/bin/bash
+    touch /home/rancher/test1
+- path: /opt/rancher/bin/start.sh
+  permissions: "0755"
+  owner: root
+  content: |
+    touch /home/rancher/test3
+- path: /etc/rc.local
+  permissions: "0755"
+  owner: root
+  content: |
+    wait-for-docker
+    docker run -itd busybox
+- path: /var/lib/rancher/conf/cloud-config-script
+  permissions: "0755"
+  owner: root
+  content: |
+    #!/bin/bash
+    touch /home/rancher/test4
+runcmd:
+- []
+- [ test ]
+- [ touch, /home/rancher/test2 ]
+- echo "" > /home/rancher/test5
+ssh_authorized_keys:
+  - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC2Sx8dhcxM16zUIJGUsoHvium2ezzXL5F5obBvWd441BSau1XTDVdO3zOchF3mWvYX5q4JT1CF4GntvM1vc16acuVmkzsjsDe3+4uVPPzJps01vDxVeV1vRM53P2deCUnrFJ48CvrPisyXSOCtUCRFC1pPdvVAnOyTkzboQkCEbt6551bXF2nTnZu7XOSdzAKj+YLIRNf/ecr4hJi9xW7Q4N6gP0C+zn/KjvFQ0QSN5t8Cpbg4ri7uR2Vd4a0ccyJ5TQLRJ3EtAvuVZK3CeY0B3/XlD31cLMSFgLpWDBU2p9OC27Lc3grcYL2kN1A1HsV5AjBWRfTnFuCcOQ7MNdjJ root@ip-172-31-27-41
