@@ -33,23 +33,23 @@ KVM_XML = '''<domain type='kvm'>
         <devices>
         <disk type='file' device='disk'>
         <driver name='qemu' type='qcow2'/>
-        <source file='/opt/{v_name_for_source}.qcow2' span="qcow2"/>
+        <source file='/opt/os-tests/images/{v_name_for_source}.qcow2' span="qcow2"/>
         <target dev='vda' bus='virtio'/>
         <boot order='1'/>
         </disk>
         <disk type="file" device="disk">
         <driver name="qemu" type="qcow2"/>
-        <source file="/opt/{second_drive}.qcow2"/>
+        <source file="/opt/os-tests/images/{second_drive}.qcow2"/>
         <target dev="vdb" bus="virtio"/>
         </disk>
         <disk type='file' device='disk'>
         <driver name='qemu' type='raw'/>
-        <source file='/opt/configdrive.img'/>
+        <source file='/opt/os-tests/assets/configdrive.img'/>
         <target dev='vdc' bus='virtio'/>
         <readonly/>
         </disk>
         <disk type='file' device='cdrom'>
-        <source file='/opt/os-tests/rancheros.iso'/>
+        <source file='/opt/os-tests/assets/rancheros.iso'/>
         <target dev='hda' bus='ide'/>
         <boot order='2'/>
         </disk>
@@ -73,8 +73,8 @@ KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         <vcpu>1</vcpu>
         <os>
         <type arch='x86_64' machine='pc'>hvm</type>
-        <kernel>/opt/vmlinuz</kernel>
-        <initrd>/opt/initrd</initrd>
+        <kernel>/opt/os-tests/assets/vmlinuz</kernel>
+        <initrd>/opt/os-tests/assets/initrd</initrd>
         <cmdline>rancher.state.dev=LABEL=RANCHER_STATE 
         rancher.state.autoformat=[/dev/sda,/dev/vda] 
         rancher.password=rancher {kernel_parameters}</cmdline>
@@ -87,7 +87,7 @@ KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         <devices>
         <disk type='file' device='disk'>
         <driver name='qemu' type='qcow2'/>
-        <source file='/opt/{v_name_for_source}.qcow2' span="qcow2"/>
+        <source file='/opt/os-tests/images/{v_name_for_source}.qcow2' span="qcow2"/>
         <target dev='vda' bus='virtio'/>
         </disk>
         <rng model='virtio'>
@@ -123,55 +123,31 @@ def ros_kvm_with_paramiko():
                                          v_name_for_source=virtual_name,
                                          second_drive=second_drive)
 
-        sub_ps = subprocess.Popen(
-            'qemu-img create -f qcow2 /opt/{virtual_name}.qcow2 10G'.format(
-                virtual_name=virtual_name), shell=True)
-        sub_ps.wait()
+        _manage_path()
 
-        sub_ps2 = subprocess.Popen(
-            'qemu-img create -f qcow2 /opt/{virtual_name}.qcow2 2G'.format(
-                virtual_name=second_drive), shell=True
-        )
-        sub_ps2.wait()
+        _create_qcow2('10', virtual_name)
+        _create_qcow2('2', second_drive)
 
         nonlocal conn
+
         conn = libvirt.open('qemu:///system')
+
         if not conn:
+
             raise Exception('Failed to open connection to qemu:///system')
         else:
             nonlocal dom
+
             dom = conn.createXML(xml_for_virtual)
-            for _ in range(90):
-                time.sleep(1)
-                obj = subprocess.Popen('arp -an | grep {mac}'.format(
-                    mac=mac),
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=True).stdout.read()
-                if len(obj) > 0:
-                    break
-                else:
-                    continue
 
-            ip = str(obj, encoding='utf-8').split('(').__getitem__(1).split(')').__getitem__(0)
+            ip = _get_ip(mac)
 
-            time.sleep(60)
             if ip:
-                ssh_client_for_reinstall = pexpect.spawn('ssh {username}@{ip}'.format(
-                    username='rancher',
-                    ip=ip))
-                ssh_client_for_reinstall.sendline(
-                    'sudo ros install -c {cloud_config} -d /dev/vda -f'.format(
-                        cloud_config=cloud_config))
 
-                time.sleep(90)
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                _install_to_hdrive(cloud_config, ip)
 
-                ssh.connect(hostname=ip,
-                            username='rancher',
-                            password='')
+                ssh = _get_ranos_ssh(ip)
+
                 return ssh
             else:
                 return None
@@ -180,15 +156,7 @@ def ros_kvm_with_paramiko():
 
     _close_conn(conn, dom, virtual_name)
 
-
-def _close_conn(conn, dom, virtual_name):
-    if dom:
-        dom.destroy()
-    if conn:
-        conn.close()
-    st = subprocess.Popen('rm -rf /opt/{virtual_name}.qcow2 /opt/{virtual_name_second}.qcow2'.format(
-        virtual_name=virtual_name, virtual_name_second=virtual_name + '_second'), shell=True)
-    st.wait()
+    _clean_qcow2(virtual_name)
 
 
 @pytest.fixture
@@ -201,42 +169,38 @@ def ros_kvm_for_kernel_parameters():
         nonlocal virtual_name
         virtual_name = _id_generator()
         mac = _mac_generator()
+
         xml_for_virtual = KERNEL_PARAMETERS_XML.format(
             virtual_name=virtual_name,
             mac_address=mac,
             v_name_for_source=virtual_name,
             kernel_parameters=kernel_parameters)
+
+        _manage_path()
+
         sub_ps = subprocess.Popen(
             'qemu-img create -f qcow2 -o size=10G /opt/{virtual_name}.qcow2'.format(
                 virtual_name=virtual_name), shell=True)
         sub_ps.wait()
+
         nonlocal conn
+
         conn = libvirt.open('qemu:///system')
+
         if not conn:
+
             raise Exception('Failed to open connection to qemu:///system')
         else:
             nonlocal dom
+
             dom = conn.createXML(xml_for_virtual)
-            for _ in range(90):
-                time.sleep(1)
-                obj = subprocess.Popen('arp -an | grep {mac}'.format(
-                    mac=mac),
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=True).stdout.read()
-                if len(obj) > 0:
-                    break
-                else:
-                    continue
-            time.sleep(60)
-            ip = str(obj, encoding='utf-8').split('(').__getitem__(1).split(')').__getitem__(0)
+
+            ip = _get_ip(mac)
+
             if ip:
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                ssh.connect(hostname=ip,
-                            username='rancher',
-                            password='rancher')
+
+                ssh = _get_ranos_ssh(ip, password='rancher')
+
                 return ssh
             else:
                 return None
@@ -244,6 +208,149 @@ def ros_kvm_for_kernel_parameters():
     yield _ros_kvm_for_kernel_parameters
 
     _close_conn(conn, dom, virtual_name)
+
+    _clean_qcow2(virtual_name)
+
+
+@pytest.fixture
+def ros_kvm_return_ip():
+    dom = None
+    conn = None
+    virtual_name = None
+
+    def _ros_kvm_return_ip(cloud_config):
+        nonlocal virtual_name
+        virtual_name = _id_generator()
+        second_drive = virtual_name + '_second'
+        mac = _mac_generator()
+
+        xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
+                                         mac_address=mac,
+                                         v_name_for_source=virtual_name,
+                                         second_drive=second_drive)
+
+        _manage_path()
+
+        _create_qcow2('10', virtual_name)
+
+        _create_qcow2('2', second_drive)
+
+        nonlocal conn
+
+        conn = libvirt.open('qemu:///system')
+
+        if not conn:
+            raise Exception('Failed to open connection to qemu:///system')
+        else:
+            nonlocal dom
+
+            dom = conn.createXML(xml_for_virtual)
+
+            ip = _get_ip(mac)
+
+            if ip:
+                _install_to_hdrive(cloud_config, ip)
+
+                ssh = _get_ranos_ssh(ip)
+
+                return ssh, ip
+            else:
+                return None, None
+
+    yield _ros_kvm_return_ip
+
+    _close_conn(conn, dom, virtual_name)
+
+    _clean_qcow2(virtual_name)
+
+
+def _install_to_hdrive(cloud_config, ip):
+    for _ in range(30):
+        time.sleep(10)
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(hostname=ip,
+                        username='rancher',
+                        password='')
+            if ssh.get_transport().active:
+                ssh.exec_command('sudo ros install -c {cloud_config} -d /dev/vda -f'.format(
+                    cloud_config=cloud_config))
+                break
+        except Exception as e:
+            ssh.close()
+
+
+def _get_ranos_ssh(ip, password=''):
+    for _ in range(30):
+        time.sleep(10)
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(hostname=ip,
+                        username='rancher',
+                        password=password)
+            if ssh.get_transport().active:
+                break
+        except Exception as e:
+            ssh.close()
+    return ssh
+
+
+def _close_conn(conn, dom, virtual_name):
+    if dom:
+        dom.destroy()
+    if conn:
+        conn.close()
+
+
+def _clean_qcow2(virtual_name):
+    """
+    The function clean up two virtual machines qcow2.
+    :param virtual_name:
+    :return:
+    """
+    st = subprocess.Popen(
+        'rm -rf /opt/os-tests/images/{virtual_name}.qcow2 /opt/os-tests/images/{virtual_name_second}.qcow2'.format(
+            virtual_name=virtual_name, virtual_name_second=virtual_name + '_second'), shell=True)
+    st.wait()
+
+
+def _get_ip(mac):
+    for _ in range(10):
+        time.sleep(5)
+        obj = subprocess.Popen('arp -an | grep {mac}'.format(
+            mac=mac),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True).stdout.read()
+        if len(obj) > 0:
+            break
+    ip = str(obj, encoding='utf-8').split('(').__getitem__(1).split(')').__getitem__(0)
+    return ip
+
+
+def _create_qcow2(capacity, virtual_name):
+    sub_ps = subprocess.Popen(
+        'qemu-img create -f qcow2 /opt/os-tests/images/{virtual_name}.qcow2 {capacity}G'.format(
+            virtual_name=virtual_name, capacity=capacity), shell=True)
+    sub_ps.wait()
+
+
+def _manage_path():
+    """
+    Manage path, may extend to add or remove path functions
+    :return:
+    """
+
+    def _check_path():
+        if not os.path.exists('/opt/os-tests/images/'):
+            os.makedirs('/opt/os-tests/images/')
+        else:
+            return
+
+    _check_path()
 
 
 def pytest_addoption(parser):
