@@ -146,7 +146,7 @@ def ros_kvm_with_paramiko():
 
                 _install_to_hdrive(cloud_config, ip)
 
-                ssh = _get_ranos_ssh(ip)
+                ssh = _get_ros_ssh(ip)
 
                 return ssh
             else:
@@ -199,7 +199,7 @@ def ros_kvm_for_kernel_parameters():
 
             if ip:
 
-                ssh = _get_ranos_ssh(ip, password='rancher')
+                ssh = _get_ros_ssh(ip, password='rancher')
 
                 return ssh
             else:
@@ -251,7 +251,7 @@ def ros_kvm_return_ip():
             if ip:
                 _install_to_hdrive(cloud_config, ip)
 
-                ssh = _get_ranos_ssh(ip)
+                ssh = _get_ros_ssh(ip)
 
                 return ssh, ip
             else:
@@ -281,7 +281,7 @@ def _install_to_hdrive(cloud_config, ip):
             ssh.close()
 
 
-def _get_ranos_ssh(ip, password=''):
+def _get_ros_ssh(ip, password=''):
     for _ in range(30):
         time.sleep(10)
         try:
@@ -317,8 +317,8 @@ def _clean_qcow2(virtual_name):
 
 
 def _get_ip(mac):
-    for _ in range(10):
-        time.sleep(5)
+    for _ in range(30):
+        time.sleep(10)
         obj = subprocess.Popen('arp -an | grep {mac}'.format(
             mac=mac),
             stdin=subprocess.PIPE,
