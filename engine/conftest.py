@@ -160,12 +160,63 @@ def ros_kvm_with_paramiko():
 
 
 @pytest.fixture
+def ros_kvm_with_paramiko_b2d():
+    dom = None
+    conn = None
+    virtual_name = None
+
+    def _ros_kvm_with_paramiko_b2d():
+        nonlocal virtual_name
+        virtual_name = _id_generator()
+        second_drive = virtual_name + '_second'
+        mac = _mac_generator()
+
+        xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
+                                         mac_address=mac,
+                                         v_name_for_source=virtual_name,
+                                         second_drive=second_drive)
+
+        _manage_path()
+
+        _create_b2d_qcow2('10', virtual_name)
+        _create_qcow2('2', second_drive)
+
+        nonlocal conn
+
+        conn = libvirt.open('qemu:///system')
+
+        if not conn:
+
+            raise Exception('Failed to open connection to qemu:///system')
+        else:
+            nonlocal dom
+
+            dom = conn.createXML(xml_for_virtual)
+
+            ip = _get_ip(mac)
+
+            if ip:
+
+                ssh = _get_ros_ssh(ip)
+
+                return ssh
+            else:
+                return None
+
+    yield _ros_kvm_with_paramiko_b2d
+
+    _close_conn(conn, dom, virtual_name)
+
+    _clean_qcow2(virtual_name)
+
+
+@pytest.fixture
 def ros_kvm_for_kernel_parameters():
     dom = None
     conn = None
     virtual_name = None
 
-    def _ros_kvm_for_kernel_parameters(kernel_parameters):
+    def _ros_kvm_for_kernel_parameters(kernel_parameters, b2d=False):
         nonlocal virtual_name
         virtual_name = _id_generator()
         mac = _mac_generator()
@@ -178,10 +229,13 @@ def ros_kvm_for_kernel_parameters():
 
         _manage_path()
 
-        sub_ps = subprocess.Popen(
-            'qemu-img create -f qcow2 -o size=10G /opt/{virtual_name}.qcow2'.format(
-                virtual_name=virtual_name), shell=True)
-        sub_ps.wait()
+        if b2d:
+            _create_b2d_qcow2('10', virtual_name)
+        else:
+            sub_ps = subprocess.Popen(
+                'qemu-img create -f qcow2 -o size=10G /opt/os-tests/images/{virtual_name}.qcow2'.format(
+                    virtual_name=virtual_name), shell=True)
+            sub_ps.wait()
 
         nonlocal conn
 
@@ -334,6 +388,19 @@ def _get_ip(mac):
 def _create_qcow2(capacity, virtual_name):
     sub_ps = subprocess.Popen(
         'qemu-img create -f qcow2 /opt/os-tests/images/{virtual_name}.qcow2 {capacity}G'.format(
+            virtual_name=virtual_name, capacity=capacity), shell=True)
+    sub_ps.wait()
+
+
+def _create_b2d_qcow2(capacity, virtual_name):
+    sub_ps = subprocess.Popen(
+        'echo "boot2docker, please format-me" | \
+            cat - /dev/zero | \
+            head -c 5242880 > \
+            /opt/os-tests/assets/format-flag.txt && \
+        qemu-img convert -f raw /opt/os-tests/assets/format-flag.txt \
+            -O qcow2 /opt/os-tests/images/{virtual_name}.qcow2 && \
+        qemu-img resize /opt/os-tests/images/{virtual_name}.qcow2 +{capacity}GB > /dev/null 2>&1'.format(
             virtual_name=virtual_name, capacity=capacity), shell=True)
     sub_ps.wait()
 
