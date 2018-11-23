@@ -112,7 +112,7 @@ def ros_kvm_with_paramiko():
     conn = None
     virtual_name = None
 
-    def _ros_kvm_with_paramiko(cloud_config):
+    def _ros_kvm_with_paramiko(cloud_config, extra_install_args=None):
         nonlocal virtual_name
         virtual_name = _id_generator()
         second_drive = virtual_name + '_second'
@@ -144,7 +144,7 @@ def ros_kvm_with_paramiko():
 
             if ip:
 
-                _install_to_hdrive(cloud_config, ip)
+                _install_to_hdrive(cloud_config, ip, extra_install_args)
 
                 ssh = _get_ros_ssh(ip)
 
@@ -318,7 +318,7 @@ def ros_kvm_return_ip():
     _clean_qcow2(virtual_name)
 
 
-def _install_to_hdrive(cloud_config, ip):
+def _install_to_hdrive(cloud_config, ip, extra_install_args=None):
     for _ in range(30):
         time.sleep(10)
         try:
@@ -327,12 +327,28 @@ def _install_to_hdrive(cloud_config, ip):
             ssh.connect(hostname=ip,
                         username='rancher',
                         password='')
+
             if ssh.get_transport().active:
-                ssh.exec_command('sudo ros install -c {cloud_config} -d /dev/vda -f'.format(
-                    cloud_config=cloud_config))
+
+                base_cmd = _get_install_args(cloud_config, extra_install_args)
+
+                ssh.exec_command(base_cmd)
                 break
         except Exception as e:
             ssh.close()
+
+
+def _get_install_args(cloud_config, extra_install_args):
+    base_cmd = 'sudo ros install -f '
+    if extra_install_args:
+        base_cmd += extra_install_args
+
+    if cloud_config:
+        base_cmd += ' -c {cloud_config} '.format(cloud_config=cloud_config)
+
+    if '-d' not in base_cmd:
+        base_cmd += ' -d /dev/vda '
+    return base_cmd
 
 
 def _get_ros_ssh(ip, password=''):
