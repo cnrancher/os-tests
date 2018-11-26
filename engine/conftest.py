@@ -138,7 +138,9 @@ def ros_kvm_with_paramiko():
         else:
             nonlocal dom
 
-            dom = conn.createXML(xml_for_virtual)
+            dom = conn.defineXML(xml_for_virtual)
+
+            dom.create()
 
             ip = _get_ip(mac)
 
@@ -148,7 +150,7 @@ def ros_kvm_with_paramiko():
 
                 ssh = _get_ros_ssh(ip)
 
-                return ssh
+                return ssh, ip, virtual_name, dom
             else:
                 return None
 
@@ -191,7 +193,9 @@ def ros_kvm_with_paramiko_b2d():
         else:
             nonlocal dom
 
-            dom = conn.createXML(xml_for_virtual)
+            dom = conn.defineXML(xml_for_virtual)
+
+            dom.create()
 
             ip = _get_ip(mac)
 
@@ -247,7 +251,9 @@ def ros_kvm_for_kernel_parameters():
         else:
             nonlocal dom
 
-            dom = conn.createXML(xml_for_virtual)
+            dom = conn.defineXML(xml_for_virtual)
+
+            dom.create()
 
             ip = _get_ip(mac)
 
@@ -298,7 +304,9 @@ def ros_kvm_return_ip():
         else:
             nonlocal dom
 
-            dom = conn.createXML(xml_for_virtual)
+            dom = conn.defineXML(xml_for_virtual)
+
+            dom.create()
 
             ip = _get_ip(mac)
 
@@ -370,6 +378,7 @@ def _get_ros_ssh(ip, password=''):
 def _close_conn(conn, dom, virtual_name):
     if dom:
         dom.destroy()
+        dom.undefine()
     if conn:
         conn.close()
 
