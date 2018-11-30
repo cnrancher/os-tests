@@ -5,9 +5,11 @@
 from utils.connect_to_os import executor, connection
 
 
-def test_switch_console(ros_kvm_return_ip, cloud_config_url):
-    client, ip = ros_kvm_return_ip(cloud_config=
-                                   '{url}/default.yml'.format(url=cloud_config_url))
+def test_switch_console(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    ip = tuple_return[1]
     output = executor(client, 'sudo ros console list')
     list_of_console = output.split('\n')
 
@@ -24,12 +26,12 @@ def test_switch_console(ros_kvm_return_ip, cloud_config_url):
             list_console_v.append(console_v.split(' ')[1])
 
     for console_v in list_console_v:
-        client = connection(ip)
+        client = connection(ip, None)
 
         executor(client, 'sudo ros console switch -f {console_version}'.format(console_version=console_v))
 
-        client = connection(ip)
-        version = executor(client, 'sudo ros console list |grep current', seconds=20)
+        client = connection(ip, None)
+        version = executor(client, 'sudo ros console list |grep current')
 
         assert (console_v in version)
 

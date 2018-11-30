@@ -3,11 +3,15 @@
 # Author :Hailong
 
 
-def test_start_commands(ros_kvm_with_paramiko, cloud_config_url):
+def test_start_commands(ros_kvm_init, cloud_config_url):
     command = 'ls /home/rancher | grep "test[0-5]"  | wc -l'
     feed_back = '5'
-    client = ros_kvm_with_paramiko(cloud_config='{url}/test_start_commands.yml'.format(url=cloud_config_url))
-    stdin, stdout, stderr = client.exec_command(command, timeout=10)
+
+    kwargs = dict(cloud_config='{url}test_start_commands.yml'.format(url=cloud_config_url),
+                  is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    stdin, stdout, stderr = client.exec_command(command, timeout=60)
     output = stdout.read().decode('utf-8')
     assert (feed_back in output)
 

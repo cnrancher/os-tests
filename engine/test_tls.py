@@ -4,11 +4,13 @@
 # Editor:Bowen Lee
 
 
-def test_tls(ros_kvm_with_paramiko, cloud_config_url):
+def test_tls(ros_kvm_init, cloud_config_url):
     command = 'set -e -x && sudo ros tls gen && docker --tlsverify version'
     feed_back = 'Client'
-    client = ros_kvm_with_paramiko(cloud_config='{url}/test_tls.yml'.format(url=cloud_config_url))
-    stdin, stdout, stderr = client.exec_command(command, timeout=10)
+    kwargs = dict(cloud_config='{url}/test_tls.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    stdin, stdout, stderr = client.exec_command(command, timeout=60)
     # Must be save in local constant
     output_content = stdout.read().decode('utf-8')
     client.close()

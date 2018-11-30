@@ -8,8 +8,11 @@ import time
 from utils.connect_to_os import connection, executor
 
 
-def test_install_msdos_mbr(ros_kvm_with_paramiko, cloud_config_url):
-    client, _, _, _ = ros_kvm_with_paramiko(cloud_config='{url}/default.yml'.format(url=cloud_config_url))
+def test_install_msdos_mbr(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url),
+                  is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
 
     command = 'sudo parted /dev/vda print'
     feed_back = 'Partition Table: msdos'
@@ -19,9 +22,12 @@ def test_install_msdos_mbr(ros_kvm_with_paramiko, cloud_config_url):
     assert (feed_back in output)
 
 
-def test_install_gpt_mbr(ros_kvm_with_paramiko, cloud_config_url):
-    client, _, _, _ = ros_kvm_with_paramiko(cloud_config='{url}/default.yml'.format(url=cloud_config_url),
-                                            extra_install_args='-t gptsyslinux')
+def test_install_gpt_mbr(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url),
+                  is_install_to_hard_drive=True, extra_install_args='-t gptsyslinux')
+
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
 
     command = 'sudo parted /dev/vda print'
     feed_back = 'Partition Table: gpt'
@@ -31,20 +37,21 @@ def test_install_gpt_mbr(ros_kvm_with_paramiko, cloud_config_url):
     assert (feed_back in output)
 
 
-def test_auto_resize(ros_kvm_with_paramiko, cloud_config_url):
+def test_auto_resize(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url), is_define_xml=True,
+                  is_install_to_hard_drive=True)
 
-    client, ip, virtual_name, dom = ros_kvm_with_paramiko(cloud_config='{url}/default.yml'.format(
-        url=cloud_config_url))
+    client, ip, virtual_name, dom = ros_kvm_init(**kwargs)
     c_get_vda_size = "sudo fdisk -l /dev/vda | head -1 | awk '{print $3}'"
     c_get_vda1_size = "sudo fdisk -l /dev/vda | grep vda1 | awk '{print $6}'"
 
-    output_vda_size = executor(client, c_get_vda_size, seconds=10).replace('\n', '')
-    output_vda1_size = executor(client, c_get_vda1_size, seconds=10).replace('\n', '')
+    output_vda_size = executor(client, c_get_vda_size).replace('\n', '')
+    output_vda1_size = executor(client, c_get_vda1_size).replace('\n', '')
     assert ('10' == output_vda_size)
     assert ('10G' == output_vda1_size)
 
     c_reset_device = 'sudo ros config set rancher.resize_device /dev/vda'
-    executor(client, c_reset_device, seconds=10)
+    executor(client, c_reset_device)
 
     # reboot domain
     dom.shutdown()
@@ -52,10 +59,10 @@ def test_auto_resize(ros_kvm_with_paramiko, cloud_config_url):
     _resize_disk(virtual_name, 30)
     dom.create()
 
-    second_client = connection(ip)
+    second_client = connection(ip, None)
 
-    output_vda_size = executor(second_client, c_get_vda_size, seconds=10).replace('\n', '')
-    output_vda1_size = executor(second_client, c_get_vda1_size, seconds=10).replace('\n', '')
+    output_vda_size = executor(second_client, c_get_vda_size).replace('\n', '')
+    output_vda1_size = executor(second_client, c_get_vda1_size).replace('\n', '')
     client.close()
     assert ('40' == output_vda_size)
     assert ('40G' == output_vda1_size)
@@ -74,3 +81,4 @@ def _confirm_shutdown(dom):
             return True
         else:
             continue
+    # TODO Need to return bool
