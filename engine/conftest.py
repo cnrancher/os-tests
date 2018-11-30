@@ -9,11 +9,9 @@ import random
 import string
 import subprocess
 import time
-from xml.etree.ElementTree import ElementTree
 import libvirt
-import pexpect
 import pytest
-import paramiko
+from utils.connect_to_os import connection
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KVM_XML = '''<domain type='kvm'>
@@ -37,11 +35,7 @@ KVM_XML = '''<domain type='kvm'>
         <target dev='vda' bus='virtio'/>
         <boot order='1'/>
         </disk>
-        <disk type="file" device="disk">
-        <driver name="qemu" type="qcow2"/>
-        <source file="/opt/os-tests/images/{second_drive}.qcow2"/>
-        <target dev="vdb" bus="virtio"/>
-        </disk>
+        {second_driver_gist}
         <disk type='file' device='disk'>
         <driver name='qemu' type='raw'/>
         <source file='/opt/os-tests/assets/configdrive.img'/>
@@ -66,6 +60,14 @@ KVM_XML = '''<domain type='kvm'>
         </devices>
         </domain>'''
 
+SECOND_DRIVE_XML_GIST = '''
+        <disk type="file" device="disk">
+        <driver name="qemu" type="qcow2"/>
+        <source file="/opt/os-tests/images/{second_drive_name}.qcow2"/>
+        <target dev="vdb" bus="virtio"/>
+        </disk>
+'''
+
 KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         <name>{virtual_name}</name>
         <memory>2048000</memory>
@@ -75,9 +77,7 @@ KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         <type arch='x86_64' machine='pc'>hvm</type>
         <kernel>/opt/os-tests/assets/vmlinuz</kernel>
         <initrd>/opt/os-tests/assets/initrd</initrd>
-        <cmdline>rancher.state.dev=LABEL=RANCHER_STATE 
-        rancher.state.autoformat=[/dev/sda,/dev/vda] 
-        rancher.password=rancher {kernel_parameters}</cmdline>
+        <cmdline>{kernel_parameters}</cmdline>
         </os>
         <features><acpi/><apic/><pae/></features>
         <clock offset='localtime'/>
@@ -89,6 +89,12 @@ KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         <driver name='qemu' type='qcow2'/>
         <source file='/opt/os-tests/images/{v_name_for_source}.qcow2' span="qcow2"/>
         <target dev='vda' bus='virtio'/>
+        </disk>
+        <disk type='file' device='disk'>
+        <driver name='qemu' type='raw'/>
+        <source file='/opt/os-tests/assets/configdrive.img'/>
+        <target dev='vdb' bus='virtio'/>
+        <readonly/>
         </disk>
         <rng model='virtio'>
         <rate period="2000" bytes="1234"/>
@@ -103,247 +109,14 @@ KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
         </devices>
         </domain>'''
 
+SSH_KEY_PATH = '/opt/os-tests/assets/id_rsa'
 CLOUD_CONFIG_URL = 'https://raw.githubusercontent.com/cnrancher/os-tests/master/assets/'
 
 
-@pytest.fixture
-def ros_kvm_with_paramiko():
-    dom = None
-    conn = None
-    virtual_name = None
+def _install_to_hdrive(cloud_config, client, extra_install_args=None):
+    base_cmd = _get_install_args(cloud_config, extra_install_args)
 
-    def _ros_kvm_with_paramiko(cloud_config, extra_install_args=None):
-        nonlocal virtual_name
-        virtual_name = _id_generator()
-        second_drive = virtual_name + '_second'
-        mac = _mac_generator()
-
-        xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
-                                         mac_address=mac,
-                                         v_name_for_source=virtual_name,
-                                         second_drive=second_drive)
-
-        _manage_path()
-
-        _create_qcow2('10', virtual_name)
-        _create_qcow2('2', second_drive)
-
-        nonlocal conn
-
-        conn = libvirt.open('qemu:///system')
-
-        if not conn:
-
-            raise Exception('Failed to open connection to qemu:///system')
-        else:
-            nonlocal dom
-
-            dom = conn.defineXML(xml_for_virtual)
-
-            dom.create()
-
-            ip = _get_ip(mac)
-
-            if ip:
-
-                _install_to_hdrive(cloud_config, ip, extra_install_args)
-
-                ssh = _get_ros_ssh(ip)
-
-                return ssh, ip, virtual_name, dom
-            else:
-                return None
-
-    yield _ros_kvm_with_paramiko
-
-    _close_conn(conn, dom, virtual_name)
-
-    _clean_qcow2(virtual_name)
-
-
-@pytest.fixture
-def ros_kvm_with_paramiko_b2d():
-    dom = None
-    conn = None
-    virtual_name = None
-
-    def _ros_kvm_with_paramiko_b2d():
-        nonlocal virtual_name
-        virtual_name = _id_generator()
-        second_drive = virtual_name + '_second'
-        mac = _mac_generator()
-
-        xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
-                                         mac_address=mac,
-                                         v_name_for_source=virtual_name,
-                                         second_drive=second_drive)
-
-        _manage_path()
-
-        _create_b2d_qcow2('10', virtual_name)
-        _create_qcow2('2', second_drive)
-
-        nonlocal conn
-
-        conn = libvirt.open('qemu:///system')
-
-        if not conn:
-
-            raise Exception('Failed to open connection to qemu:///system')
-        else:
-            nonlocal dom
-
-            dom = conn.defineXML(xml_for_virtual)
-
-            dom.create()
-
-            ip = _get_ip(mac)
-
-            if ip:
-
-                ssh = _get_ros_ssh(ip)
-
-                return ssh
-            else:
-                return None
-
-    yield _ros_kvm_with_paramiko_b2d
-
-    _close_conn(conn, dom, virtual_name)
-
-    _clean_qcow2(virtual_name)
-
-
-@pytest.fixture
-def ros_kvm_for_kernel_parameters():
-    dom = None
-    conn = None
-    virtual_name = None
-
-    def _ros_kvm_for_kernel_parameters(kernel_parameters, b2d=False):
-        nonlocal virtual_name
-        virtual_name = _id_generator()
-        mac = _mac_generator()
-
-        xml_for_virtual = KERNEL_PARAMETERS_XML.format(
-            virtual_name=virtual_name,
-            mac_address=mac,
-            v_name_for_source=virtual_name,
-            kernel_parameters=kernel_parameters)
-
-        _manage_path()
-
-        if b2d:
-            _create_b2d_qcow2('10', virtual_name)
-        else:
-            sub_ps = subprocess.Popen(
-                'qemu-img create -f qcow2 -o size=10G /opt/os-tests/images/{virtual_name}.qcow2'.format(
-                    virtual_name=virtual_name), shell=True)
-            sub_ps.wait()
-
-        nonlocal conn
-
-        conn = libvirt.open('qemu:///system')
-
-        if not conn:
-
-            raise Exception('Failed to open connection to qemu:///system')
-        else:
-            nonlocal dom
-
-            dom = conn.defineXML(xml_for_virtual)
-
-            dom.create()
-
-            ip = _get_ip(mac)
-
-            if ip:
-
-                ssh = _get_ros_ssh(ip, password='rancher')
-
-                return ssh
-            else:
-                return None
-
-    yield _ros_kvm_for_kernel_parameters
-
-    _close_conn(conn, dom, virtual_name)
-
-    _clean_qcow2(virtual_name)
-
-
-@pytest.fixture
-def ros_kvm_return_ip():
-    dom = None
-    conn = None
-    virtual_name = None
-
-    def _ros_kvm_return_ip(cloud_config):
-        nonlocal virtual_name
-        virtual_name = _id_generator()
-        second_drive = virtual_name + '_second'
-        mac = _mac_generator()
-
-        xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
-                                         mac_address=mac,
-                                         v_name_for_source=virtual_name,
-                                         second_drive=second_drive)
-
-        _manage_path()
-
-        _create_qcow2('10', virtual_name)
-
-        _create_qcow2('2', second_drive)
-
-        nonlocal conn
-
-        conn = libvirt.open('qemu:///system')
-
-        if not conn:
-            raise Exception('Failed to open connection to qemu:///system')
-        else:
-            nonlocal dom
-
-            dom = conn.defineXML(xml_for_virtual)
-
-            dom.create()
-
-            ip = _get_ip(mac)
-
-            if ip:
-                _install_to_hdrive(cloud_config, ip)
-
-                ssh = _get_ros_ssh(ip)
-
-                return ssh, ip
-            else:
-                return None, None
-
-    yield _ros_kvm_return_ip
-
-    _close_conn(conn, dom, virtual_name)
-
-    _clean_qcow2(virtual_name)
-
-
-def _install_to_hdrive(cloud_config, ip, extra_install_args=None):
-    for _ in range(30):
-        time.sleep(10)
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname=ip,
-                        username='rancher',
-                        password='')
-
-            if ssh.get_transport().active:
-
-                base_cmd = _get_install_args(cloud_config, extra_install_args)
-
-                ssh.exec_command(base_cmd)
-                break
-        except Exception as e:
-            ssh.close()
+    client.exec_command(base_cmd)
 
 
 def _get_install_args(cloud_config, extra_install_args):
@@ -359,26 +132,13 @@ def _get_install_args(cloud_config, extra_install_args):
     return base_cmd
 
 
-def _get_ros_ssh(ip, password=''):
-    for _ in range(30):
-        time.sleep(10)
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname=ip,
-                        username='rancher',
-                        password=password)
-            if ssh.get_transport().active:
-                break
-        except Exception as e:
-            ssh.close()
-    return ssh
-
-
-def _close_conn(conn, dom, virtual_name):
+def _close_conn(conn, dom, is_define_xml):
     if dom:
-        dom.destroy()
-        dom.undefine()
+        if is_define_xml:
+            dom.destroy()
+            dom.undefine()
+        else:
+            dom.destroy()
     if conn:
         conn.close()
 
@@ -389,10 +149,12 @@ def _clean_qcow2(virtual_name):
     :param virtual_name:
     :return:
     """
-    st = subprocess.Popen(
-        'rm -rf /opt/os-tests/images/{virtual_name}.qcow2 /opt/os-tests/images/{virtual_name_second}.qcow2'.format(
-            virtual_name=virtual_name, virtual_name_second=virtual_name + '_second'), shell=True)
-    st.wait()
+    # TODO If there is only one the qcow2, Does the command is running?
+    if virtual_name:
+        st = subprocess.Popen(
+            'rm -rf /opt/os-tests/images/{virtual_name}.qcow2 /opt/os-tests/images/{virtual_name_second}.qcow2'.format(
+                virtual_name=virtual_name, virtual_name_second=virtual_name + '_second'), shell=True)
+        st.wait()
 
 
 def _get_ip(mac):
@@ -403,10 +165,13 @@ def _get_ip(mac):
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            shell=True).stdout.read()
-        if len(obj) > 0:
+            shell=True)
+        obj.wait()
+        content_return = obj.stdout.read()
+        if len(content_return) > 0:
             break
-    ip = str(obj, encoding='utf-8').split('(').__getitem__(1).split(')').__getitem__(0)
+
+    ip = str(content_return, encoding='utf-8').split('(').__getitem__(1).split(')').__getitem__(0)
     return ip
 
 
@@ -465,61 +230,6 @@ def teardown_function():
     pass
 
 
-def _if_match(node, kv_map):
-    for key in kv_map:
-        if node.get(key) != kv_map.get(key):
-            return False
-    return True
-
-
-def _create_xml(config_path, mac, virtual_name):
-    try:
-        if os.path.exists(config_path):
-            tree = _read_xml(config_path)
-
-            # Insert virtual machine name
-            nodes_kvm_name = _find_nodes(tree, 'name')
-
-            _change_node_text(nodes_kvm_name, virtual_name)
-            assert (tree.findtext('name') == virtual_name)
-
-            # Insert disk typed 'qcow2'
-            nodes_kvm_spice = _find_nodes(tree, 'devices/disk/source')
-            node_kvm_spice = _get_node_by_key_value(nodes_kvm_spice, {'span': 'qcow2'})
-
-            _change_node_attribute(node_kvm_spice,
-                                   {'file': '/opt/{machine_name}.qcow2'.format(machine_name=virtual_name)})
-            # Check machine qcow2
-            _check_node_attribute(node_kvm_spice,
-                                  {'file': '/opt/{machine_name}.qcow2'.format(machine_name=virtual_name)})
-
-            # Insert MAC address
-            node_kvm_mac = _find_nodes(tree, 'devices/interface/mac')
-            _change_node_attribute(node_kvm_mac, {'address': mac})
-
-            # Check mac address
-            _check_node_attribute(node_kvm_mac, {'address': mac})
-
-            # Return XMl config
-
-            tree.write(BASE_DIR + '/config/{virtualenv_name}.xml'.format(virtualenv_name=virtual_name),
-                       encoding="utf-8",
-                       xml_declaration=True)
-
-        else:
-            raise Exception('Config path is none')
-    except Exception as e:
-        raise Exception(e.args.__getitem__(0))
-
-
-def _load_xml(path):
-    if os.path.exists(path):
-        with open(path, 'r') as xml_reader:
-            return xml_reader.read()
-    else:
-        raise Exception('XMl is None.')
-
-
 def _id_generator(size=8, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
@@ -532,40 +242,86 @@ def _mac_generator():
     return ':'.join(map(lambda x: "%02x" % x, mac))
 
 
-def _change_node_text(nodelist, text):
-    for node in nodelist:
-        node.text = text
+@pytest.fixture
+def ros_kvm_init():
+    dom = None
+    conn = None
+    virtual_name = None
+    is_define_xml = False
 
+    def _ros_kvm_init(**kwargs):
+        nonlocal virtual_name
+        virtual_name = _id_generator()
 
-def _change_node_attribute(nodelist, attribute_dic):
-    for node in nodelist:
-        for key in attribute_dic:
-            node.set(key, attribute_dic.get(key))
+        mac = _mac_generator()
+        # TODO It's not useful
+        _manage_path()
 
+        if kwargs.get('is_kernel_parameters'):
+            kernel_parameters = kwargs.get('kernel_parameters')
+            # TODO KERNEL_PARAMETERS_XML
+            xml_for_virtual = KERNEL_PARAMETERS_XML.format(
+                virtual_name=virtual_name,
+                mac_address=mac,
+                v_name_for_source=virtual_name,
+                kernel_parameters=kernel_parameters)
+        else:
+            if kwargs.get('is_second_hd'):
+                second_drive_name = virtual_name + '_second'
+                xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
+                                                 mac_address=mac,
+                                                 v_name_for_source=virtual_name,
+                                                 second_driver_gist=SECOND_DRIVE_XML_GIST.format(
+                                                     second_drive_name=second_drive_name))
+                # TODO Create second_drive
+                _create_qcow2('2', second_drive_name)
+            else:
+                xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
+                                                 mac_address=mac,
+                                                 v_name_for_source=virtual_name,
+                                                 second_driver_gist='')
 
-def _check_node_attribute(nodelist, attribute_dic):
-    for node in nodelist:
-        for key in attribute_dic:
-            assert (node.get(key) == attribute_dic.get(key))
+        # region    Create qcow2
+        if kwargs.get('is_b2d'):
+            _create_b2d_qcow2('10', virtual_name)
+        else:
+            _create_qcow2('10', virtual_name)
 
+        # endregion
+        nonlocal conn
 
-def _get_node_by_key_value(nodelist, kv_map):
-    result_nodes = []
-    for node in nodelist:
-        if _if_match(node, kv_map):
-            result_nodes.append(node)
-    return result_nodes
+        conn = libvirt.open('qemu:///system')
 
+        if not conn:
+            raise Exception('Failed to open connection to qemu:///system')
+        else:
+            nonlocal dom
+            nonlocal is_define_xml
+            is_define_xml = kwargs.get('is_define_xml')
+            if is_define_xml:
+                dom = conn.defineXML(xml_for_virtual)
+                dom.create()
+            else:
+                dom = conn.createXML(xml_for_virtual)
 
-def _read_xml(in_path):
-    tree = ElementTree()
-    tree.parse(in_path)
-    return tree
+        ip = _get_ip(mac)
 
+        if ip:
+            if kwargs.get('is_install_to_hard_drive'):
+                cloud_config = kwargs.get('cloud_config')
 
-def _find_nodes(tree, path):
-    return tree.findall(path)
+                client = connection(ip=ip, seconds=kwargs.get('seconds_for_install'))
+                _install_to_hdrive(cloud_config, client, kwargs.get('extra_install_args'))
+                time.sleep(10)
 
+            ssh = connection(ip, seconds=kwargs.get('seconds_for_reconnect'))
 
-def _get_nodes_text(tree, path):
-    return tree.findtext(path)
+            return ssh, ip, virtual_name, dom
+        else:
+            return None
+
+    yield _ros_kvm_init
+
+    _close_conn(conn, dom, is_define_xml)
+
+    _clean_qcow2(virtual_name)
