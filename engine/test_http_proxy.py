@@ -3,14 +3,15 @@
 # Author :Bowen Lee
 
 
-def test_http_proxy(ros_kvm_with_paramiko, cloud_config_url):
+def test_http_proxy(ros_kvm_init, cloud_config_url):
     command = 'sudo system-docker inspect docker'
     config_http = 'HTTP_PROXY=invalid'
     config_https = 'HTTPS_PROXY=invalid'
     config_no_proxy = 'NO_PROXY=invalid'
-    client = ros_kvm_with_paramiko(cloud_config='{url}/test_http_proxy.yml'.format(url=cloud_config_url))
-
-    stdin, stdout, stderr = client.exec_command(command, timeout=10)
+    kwargs = dict(cloud_config='{url}test_http_proxy.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    stdin, stdout, stderr = client.exec_command(command, timeout=60)
     output = stdout.read().decode('utf-8')
     client.close()
     assert ((config_http in output)

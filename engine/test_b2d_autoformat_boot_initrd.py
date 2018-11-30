@@ -3,13 +3,15 @@
 # Author :Hailong
 
 
-def test_b2d_autoformat_boot_initrd(ros_kvm_for_kernel_parameters):
+def test_b2d_autoformat_boot_initrd(ros_kvm_init):
     command = 'blkid'
     feed_back = 'B2D_STATE'
-    client = ros_kvm_for_kernel_parameters(kernel_parameters=None, b2d=True)
+    kwargs = dict(is_b2d=True, is_kernel_parameters=True,
+                  kernel_parameters='rancher.state.dev=LABEL=RANCHER_STATE rancher.state.autoformat=[/dev/sda,/dev/vda]')
+    tuple_return = ros_kvm_init(**kwargs)
 
-    stdin, stdout, stderr = client.exec_command(command, timeout=10)
+    client = tuple_return[0]
+    stdin, stdout, stderr = client.exec_command(command, timeout=60)
     output = stdout.read().decode('utf-8')
     client.close()
     assert (feed_back in output)
-

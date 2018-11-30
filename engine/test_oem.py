@@ -4,8 +4,12 @@
 from utils.connect_to_os import executor, connection
 
 
-def test_oem(ros_kvm_return_ip, cloud_config_url):
-    client, ip = ros_kvm_return_ip(cloud_config='{url}/default.yml'.format(url=cloud_config_url))
+def test_oem(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True,
+                  is_second_hd=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    ip = tuple_return[1]
     c_add_ome_config = 'set -x && ' \
                        'set -e && ' \
                        'sudo mkfs.ext4 -L RANCHER_OEM /dev/vdb && ' \
@@ -17,7 +21,7 @@ def test_oem(ros_kvm_return_ip, cloud_config_url):
 
     executor(client, 'sudo reboot')
 
-    second_client = connection(ip)
+    second_client = connection(ip, None)
     c_ls_oem = 'ls /usr/share/ros/oem'
     output_ls_oem = executor(second_client, c_ls_oem)
     assert ('oem-config.yml' in output_ls_oem)
