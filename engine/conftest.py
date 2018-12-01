@@ -55,6 +55,7 @@ KVM_XML = '''<domain type='kvm'>
         <source bridge='virbr0'/>
         <mac address="{mac_address}"/>
         </interface>
+        {network_xml_gist}
         <input type='mouse' bus='ps2'/>
         <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0' keymap='en-us'/>
         </devices>
@@ -66,6 +67,21 @@ SECOND_DRIVE_XML_GIST = '''
         <source file="/opt/os-tests/images/{second_drive_name}.qcow2"/>
         <target dev="vdb" bus="virtio"/>
         </disk>
+'''
+
+NETWORK_XML_GIST = '''
+        <interface type='bridge'>
+        <source bridge='virbr0'/>
+        </interface>
+        <interface type='bridge'>
+        <source bridge='virbr0'/>
+        </interface>
+        <interface type='bridge'>
+        <source bridge='virbr0'/>
+        </interface>
+        <interface type='bridge'>
+        <source bridge='virbr0'/>
+        </interface>      
 '''
 
 KERNEL_PARAMETERS_XML = '''<domain type='kvm'>
@@ -254,12 +270,10 @@ def ros_kvm_init():
         virtual_name = _id_generator()
 
         mac = _mac_generator()
-        # TODO It's not useful
         _manage_path()
 
         if kwargs.get('is_kernel_parameters'):
             kernel_parameters = kwargs.get('kernel_parameters')
-            # TODO KERNEL_PARAMETERS_XML
             xml_for_virtual = KERNEL_PARAMETERS_XML.format(
                 virtual_name=virtual_name,
                 mac_address=mac,
@@ -268,18 +282,22 @@ def ros_kvm_init():
         else:
             if kwargs.get('is_second_hd'):
                 second_drive_name = virtual_name + '_second'
-                xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
-                                                 mac_address=mac,
-                                                 v_name_for_source=virtual_name,
-                                                 second_driver_gist=SECOND_DRIVE_XML_GIST.format(
-                                                     second_drive_name=second_drive_name))
-                # TODO Create second_drive
+                #  Create second_drive
                 _create_qcow2('2', second_drive_name)
             else:
-                xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
-                                                 mac_address=mac,
-                                                 v_name_for_source=virtual_name,
-                                                 second_driver_gist='')
+                second_drive_name = ''
+
+            if kwargs.get('is_network_gist'):
+                network_xml_gist = NETWORK_XML_GIST
+
+            else:
+                network_xml_gist = ''
+
+            xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
+                                             mac_address=mac,
+                                             v_name_for_source=virtual_name,
+                                             second_driver_gist=second_drive_name,
+                                             network_xml_gist=network_xml_gist)
 
         # region    Create qcow2
         if kwargs.get('is_b2d'):
