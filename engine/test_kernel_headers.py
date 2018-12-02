@@ -4,7 +4,7 @@
 
 
 def test_kernel_headers(ros_kvm_init, cloud_config_url):
-    command = 'sleep ; sudo system-docker inspect kernel-headers'
+    command = 'sleep 10; sudo system-docker inspect kernel-headers'
     kwargs = dict(cloud_config='{url}test_kernel_headers.yml'.format(url=cloud_config_url),
                   is_install_to_hard_drive=True)
     tuple_return = ros_kvm_init(**kwargs)
