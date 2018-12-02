@@ -11,10 +11,10 @@ def test_swap(ros_kvm_init, cloud_config_url):
 
     tuple_return = ros_kvm_init(**kwargs)
     client = tuple_return[0]
-    client.exec_command('sudo mkswap /dev/vdb && sudo cloud-init-execute', timeout=60)
+    client.exec_command('sudo mkswap /dev/vdb ; sudo cloud-init-execute', timeout=100)
     # Network delay
-    time.sleep(5)
-    stdin, stdout, stderr = client.exec_command('cat /proc/swaps | grep /dev/vdb', timeout=60)
+    time.sleep(30)
+    stdin, stdout, stderr = client.exec_command('cat /proc/swaps | grep /dev/vdb', timeout=100)
     output = stdout.read().decode('utf-8')
     client.close()
     assert ('/dev/vdb' in output)
