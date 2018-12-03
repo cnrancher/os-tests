@@ -13,9 +13,6 @@ def test_network_from_cloud_cfg(ros_kvm_init, cloud_config_url):
                   is_install_to_hard_drive=True, is_network_gist=True)
     tuple_return = ros_kvm_init(**kwargs)
     client = tuple_return[0]
-    # Verify mtu
-    output_mtu = executor(client, 'ip address show bond0')
-    assert ('mtu 1450' in output_mtu)
 
     # Verify vlan
     output_eth1_100 = executor(client, 'ip address show eth1.100')
@@ -28,6 +25,10 @@ def test_network_from_cloud_cfg(ros_kvm_init, cloud_config_url):
     assert ('master br0' in output_eth2)
     output_br0 = executor(client, 'ip address show br0')
     assert ('inet 192.168.122' in output_br0)
+
+    # Verify mtu
+    output_mtu = executor(client, 'ip address show bond0')
+    assert ('mtu 1450' in output_mtu)
 
     # Verify NIC bonding
     output_bond0 = executor(client, 'ip address show bond0')
@@ -111,13 +112,14 @@ def test_network_cloud_cfg(ros_kvm_init, cloud_config_url):
     output_eth1_gw = executor(client, 'ip route show dev eth1')
     assert ('default via 10.1.0.1' in output_eth1_gw)
 
-    output_eth2_ip = executor(client, 'ip address show eth2')
-    assert ('inet 10.31.168.85/24' in output_eth2_ip)
     # Known issue https://github.com/rancher/os/issues/2587
-    output_eth2_gw = executor(client, 'ip route show dev eth2')
-    client.close()
+    # output_eth2_gw = executor(client, 'ip route show dev eth2')
+    # assert ('default via 10.31.168.1' in output_eth2_gw)
 
-    assert ('default via 10.31.168.1' in output_eth2_gw)
+    output_eth2_ip = executor(client, 'ip address show eth2')
+    client.close()
+    assert ('inet 10.31.168.85/24' in output_eth2_ip)
+
 
 
 def test_network_from_url(ros_kvm_init, cloud_config_url):
