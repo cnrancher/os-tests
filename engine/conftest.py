@@ -284,8 +284,9 @@ def ros_kvm_init():
                 second_drive_name = virtual_name + '_second'
                 #  Create second_drive
                 _create_qcow2('2', second_drive_name)
+                second_driver_gist = SECOND_DRIVE_XML_GIST.format(second_drive_name=second_drive_name)
             else:
-                second_drive_name = ''
+                second_driver_gist = ''
 
             if kwargs.get('is_network_gist'):
                 network_xml_gist = NETWORK_XML_GIST
@@ -296,7 +297,7 @@ def ros_kvm_init():
             xml_for_virtual = KVM_XML.format(virtual_name=virtual_name,
                                              mac_address=mac,
                                              v_name_for_source=virtual_name,
-                                             second_driver_gist=second_drive_name,
+                                             second_driver_gist=second_driver_gist,
                                              network_xml_gist=network_xml_gist)
 
         # region    Create qcow2
