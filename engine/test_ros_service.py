@@ -24,7 +24,7 @@ def test_ros_local_service(ros_kvm_init, cloud_config_url):
     executor(client, 'sudo cp test.yml /var/lib/rancher/conf/test.yml')
     executor(client, 'sudo ros service enable /var/lib/rancher/conf/test.yml')
     executor(client, 'sudo ros service up test')
-    output = executor(client, 'sudo ros service logs test | grep bin')
+    output = executor(client, 'sudo ros service logs test')
     assert ('bin' in output)
 
 
@@ -32,7 +32,7 @@ def test_ros_local_service_user(ros_kvm_init, cloud_config_url):
     kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
     tuple_return = ros_kvm_init(**kwargs)
     client = tuple_return[0]
-    create_test_image = 'echo "FROM alpine" > Dockerfile'
+    create_test_image = 'docker pull alpine && echo "FROM alpine" > Dockerfile'
     executor(client, create_test_image)
     build_test_image = 'sudo docker build -t test_image_user .'
     executor(client, build_test_image)
@@ -45,5 +45,5 @@ def test_ros_local_service_user(ros_kvm_init, cloud_config_url):
     executor(client, 'sudo cp test.yml /var/lib/rancher/conf/test.yml')
     executor(client, 'sudo ros service enable /var/lib/rancher/conf/test.yml')
     executor(client, 'sudo ros service up test')
-    output = executor(client, 'sudo ros service logs test | grep bin')
+    output = executor(client, 'sudo ros service logs test')
     assert ('bin' in output)
