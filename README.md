@@ -36,7 +36,7 @@ source /your_env_name/bin/activate
 
 ## Running
 
-* Run your test cases with command `pytest -s engine/ --cloud-config-url={cloud config path}`
+* Run your test cases with command `tox`
 
 
 ## License
