@@ -16,7 +16,7 @@ def test_ssh_key_merge(ros_kvm_init, cloud_config_url):
                    '> /var/lib/rancher/conf/metadata'
 
     set_ssh_aut_key = 'echo -e ' \
-                      '"$(sudo ros config get ssh_authorized_keys | head -2)\n- zero\n- one\n- two\n" ' \
+                      '"$(sudo ros config get ssh_authorized_keys | head -1)\n- zero\n- one\n- two\n" ' \
                       '> expected'
 
     set_current = 'sudo ros config get ssh_authorized_keys > current_config'

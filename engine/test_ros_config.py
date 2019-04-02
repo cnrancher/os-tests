@@ -3,6 +3,9 @@
 # Author :Hailong
 
 
+from utils.connect_to_os import executor
+
+
 def test_ros_config(ros_kvm_init, cloud_config_url):
     fb_cc_hostname = 'hostname3'
     command_cc_hostname = 'sudo ros config get hostname'
@@ -86,6 +89,15 @@ def test_ros_config(ros_kvm_init, cloud_config_url):
     output_cli_get_export = _get_full_export(client)
     client.close()
     assert (fb_cli_labels in output_cli_get_export)
+
+
+def test_ros_config_ssh_authorized_keys(ros_kvm_init, cloud_config_url):
+    kwargs = dict(cloud_config='{url}default.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+    client = tuple_return[0]
+    output_get_ssh_authkey = executor(client, 'sudo ros config get ssh_authorized_keys')
+    output_cat_ssh_authkey = executor(client, 'cat ~/.ssh/authorized_keys')
+    assert (output_cat_ssh_authkey in output_get_ssh_authkey)
 
 
 def _get_export(client):
