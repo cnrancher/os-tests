@@ -29,6 +29,7 @@ def test_switch_docker(ros_kvm_init, cloud_config_url):
             current_version = docker_v.split(' ')[2]
         else:
             list_docker_v.append(docker_v.split(' ')[1])
+    assert (current_version != None)
 
     list_of_checking_docker_v = list_docker_v[:5] + [special_version, special2_version, special3_version]
 
