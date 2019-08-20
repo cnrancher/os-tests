@@ -18,3 +18,12 @@ def test_docker_engine(ros_kvm_init, cloud_config_url):
     output_docker_info = stdout.read().decode('utf-8')
     assert ('19.03.1' in output_docker_info)
 
+def test_custom_docker_engine(ros_kvm_init, cloud_config_url):
+    command = 'docker info'
+    kwargs = dict(cloud_config='{url}test_custom_docker_engine.yml'.format(url=cloud_config_url), is_install_to_hard_drive=True)
+    tuple_return = ros_kvm_init(**kwargs)
+
+    client = tuple_return[0]
+    stdin, stdout, stderr = client.exec_command(command, timeout=60)
+    output = stdout.read().decode('utf-8')
+    assert ('Server Version: 18.09.7' in output)
