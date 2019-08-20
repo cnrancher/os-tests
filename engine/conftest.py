@@ -331,7 +331,7 @@ def ros_kvm_init():
 
                 client = connection(ip=ip, seconds=kwargs.get('seconds_for_install'))
                 _install_to_hdrive(cloud_config, client, kwargs.get('extra_install_args'))
-                time.sleep(10)
+                time.sleep(30)
 
             ssh = connection(ip, seconds=kwargs.get('seconds_for_reconnect'))
 
