@@ -3,6 +3,7 @@
 # Author :Bowen Lee
 
 from utils.connect_to_os import connection, executor
+import time
 
 
 def test_preload(ros_kvm_init, cloud_config_url):
@@ -33,5 +34,6 @@ def test_preload(ros_kvm_init, cloud_config_url):
 
     output_sys_docker = executor(second_client, 'sudo system-docker images | grep busybox')
     assert ('busybox' in output_sys_docker)
+    time.sleep(10)
     output_user_docker = executor(second_client, 'docker images | grep alpine')
     assert ('alpine' in output_user_docker)
