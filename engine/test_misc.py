@@ -26,7 +26,7 @@ def test_misc(ros_kvm_init, cloud_config_url):
                   "&& sudo ros c set rancher.docker.tls true" \
                   "&& sudo system-docker restart docker"
     client.exec_command(command_tls, timeout=60)
-    time.sleep(10)
+    time.sleep(30)
     command_check_docker = 'docker --tlsverify version'
     stdin, stdout, stderr = client.exec_command(command_check_docker, timeout=60)
     output_docker_info = stdout.read().decode('utf-8')
